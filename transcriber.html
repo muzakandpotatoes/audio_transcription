@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Transcriber</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .config-note {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 30px;
+            font-size: 14px;
+            color: #856404;
+        }
+
+        .status-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            min-height: 60px;
+        }
+
+        .recording-indicator {
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .recording-indicator.active {
+            display: flex;
+        }
+
+        .red-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #e74c3c;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.6;
+                transform: scale(1.1);
+            }
+        }
+
+        .timer {
+            font-family: 'Courier New', monospace;
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status-text {
+            font-size: 16px;
+            color: #666;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background-color: #4a90e2;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #357abd;
+        }
+
+        .btn-warning {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background-color: #d68910;
+        }
+
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background-color: #c0392b;
+        }
+
+        .btn-success {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background-color: #27ae60;
+        }
+
+        .btn-purple {
+            background-color: #9b59b6;
+            color: white;
+        }
+
+        .btn-purple:hover:not(:disabled) {
+            background-color: #8e44ad;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+
+        .transcription-item {
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+
+        .transcription-item.latest {
+            background-color: #f0f8ff;
+            border-color: #4a90e2;
+        }
+
+        .transcription-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .transcription-meta {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .transcription-meta h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .transcription-meta .timestamp {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .transcription-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .transcription-text {
+            width: 100%;
+            min-height: 150px;
+            padding: 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background-color: white;
+            font-size: 16px;
+            line-height: 1.6;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .transcription-text:focus {
+            outline: 2px solid #4a90e2;
+            outline-offset: 2px;
+        }
+
+        .history-section {
+            margin-top: 40px;
+        }
+
+        .history-section h2 {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .error-container {
+            display: none;
+            background-color: #e74c3c;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+
+        .error-container.visible {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            color: #4a90e2;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .transcription-actions {
+                width: 100%;
+            }
+
+            .transcription-actions button {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Audio Transcriber</h1>
+        </header>
+
+        <div class="config-note" id="configNote">
+            <strong>Note:</strong> You'll be prompted to enter your OpenAI API key when you start recording. <button class="btn-small btn-primary" onclick="promptForApiKey()" style="margin-left: 10px;">Set API Key Now</button>
+        </div>
+
+        <div class="status-section">
+            <div class="recording-indicator" id="recordingIndicator">
+                <div class="red-dot"></div>
+                <span class="status-text" id="recordingStatusText">Recording</span>
+            </div>
+            <div class="timer" id="timer">00:00</div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="btn-primary">Start Recording</button>
+            <button id="pauseBtn" class="btn-warning" disabled>Pause</button>
+            <button id="stopBtn" class="btn-danger" disabled>Stop</button>
+            <button id="cancelBtn" class="btn-danger" disabled>Cancel</button>
+        </div>
+
+        <div id="transcriptionsContainer"></div>
+
+        <div class="error-container" id="errorContainer"></div>
+        <div class="loading" id="loadingText" style="display: none;">Processing...</div>
+    </div>
+
+    <script>
+        // ==================== CONFIGURATION ====================
+        const CONFIG = {
+            OPENAI_API_KEY: 'YOUR_OPENAI_API_KEY_HERE', // Replace with your OpenAI API key for local development
+            WHISPER_API_ENDPOINT: 'https://api.openai.com/v1/audio/transcriptions',
+            GPT_API_ENDPOINT: 'https://api.openai.com/v1/chat/completions',
+            WHISPER_MODEL: 'whisper-1',
+            GPT_MODEL: 'gpt-4o'
+        };
+
+        // ==================== API KEY MANAGEMENT ====================
+        function isValidApiKey(key) {
+            return key && key.trim() !== '' && key !== 'YOUR_OPENAI_API_KEY_HERE' && key.startsWith('sk-');
+        }
+
+        function getApiKey() {
+            // First, check if there's a valid key in the config (for local development)
+            if (isValidApiKey(CONFIG.OPENAI_API_KEY)) {
+                return CONFIG.OPENAI_API_KEY;
+            }
+
+            // Otherwise, check localStorage
+            const storedKey = localStorage.getItem('openai_api_key');
+            if (isValidApiKey(storedKey)) {
+                return storedKey;
+            }
+
+            return null;
+        }
+
+        function saveApiKey(key) {
+            if (isValidApiKey(key)) {
+                localStorage.setItem('openai_api_key', key.trim());
+                updateConfigNote();
+                return true;
+            }
+            return false;
+        }
+
+        function promptForApiKey() {
+            const currentKey = getApiKey();
+            const message = currentKey
+                ? 'Update your OpenAI API key:'
+                : 'Please enter your OpenAI API key:';
+
+            const key = prompt(message, currentKey || '');
+
+            if (key === null) {
+                return null; // User cancelled
+            }
+
+            if (!isValidApiKey(key)) {
+                showError('Invalid API key. Please enter a valid OpenAI API key starting with "sk-"');
+                return null;
+            }
+
+            saveApiKey(key);
+            showSuccess('API key saved successfully!');
+            return key;
+        }
+
+        function updateConfigNote() {
+            const configNote = document.getElementById('configNote');
+            const apiKey = getApiKey();
+
+            if (apiKey) {
+                configNote.innerHTML = `
+                    <strong>✓ API Key configured</strong>
+                    <button class="btn-small btn-primary" onclick="promptForApiKey()" style="margin-left: 10px;">Update API Key</button>
+                `;
+                configNote.style.backgroundColor = '#d4edda';
+                configNote.style.borderColor = '#28a745';
+                configNote.style.color = '#155724';
+            } else {
+                configNote.innerHTML = `
+                    <strong>Note:</strong> You'll be prompted to enter your OpenAI API key when you start recording.
+                    <button class="btn-small btn-primary" onclick="promptForApiKey()" style="margin-left: 10px;">Set API Key Now</button>
+                `;
+            }
+        }
+
+        function showSuccess(message) {
+            const successContainer = document.createElement('div');
+            successContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; background-color: #28a745; color: white; padding: 12px 20px; border-radius: 6px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1000;';
+            successContainer.textContent = message;
+            document.body.appendChild(successContainer);
+
+            setTimeout(() => {
+                successContainer.remove();
+            }, 3000);
+        }
+
+        // Make promptForApiKey globally accessible
+        window.promptForApiKey = promptForApiKey;
+
+        // ==================== STATE MANAGEMENT ====================
+        const appState = {
+            isRecording: false,
+            isPaused: false,
+            mediaRecorder: null,
+            audioChunks: [],
+            stream: null,
+            startTime: null,
+            pausedTime: 0,
+            timerInterval: null,
+            transcriptions: [],
+            currentEditTarget: null // Stores which transcription is being edited via voice
+        };
+
+        // ==================== DOM ELEMENTS ====================
+        const elements = {
+            startBtn: document.getElementById('startBtn'),
+            pauseBtn: document.getElementById('pauseBtn'),
+            stopBtn: document.getElementById('stopBtn'),
+            cancelBtn: document.getElementById('cancelBtn'),
+            timer: document.getElementById('timer'),
+            recordingIndicator: document.getElementById('recordingIndicator'),
+            recordingStatusText: document.getElementById('recordingStatusText'),
+            transcriptionsContainer: document.getElementById('transcriptionsContainer'),
+            errorContainer: document.getElementById('errorContainer'),
+            loadingText: document.getElementById('loadingText')
+        };
+
+        // ==================== UTILITY FUNCTIONS ====================
+        function getSupportedMimeType() {
+            const mimeTypes = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/ogg;codecs=opus',
+                'audio/mp4'
+            ];
+            return mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || mimeTypes[0];
+        }
+
+        function formatTime(milliseconds) {
+            const totalSeconds = Math.floor(milliseconds / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function formatTimestamp(date) {
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+
+        // ==================== STORAGE FUNCTIONS ====================
+        function saveToStorage() {
+            try {
+                localStorage.setItem('transcriptions', JSON.stringify(appState.transcriptions));
+            } catch (error) {
+                console.warn('Failed to save to localStorage:', error);
+            }
+        }
+
+        function loadFromStorage() {
+            try {
+                const saved = localStorage.getItem('transcriptions');
+                if (saved) {
+                    appState.transcriptions = JSON.parse(saved);
+                    // Convert timestamp strings back to Date objects
+                    appState.transcriptions.forEach(t => {
+                        t.timestamp = new Date(t.timestamp);
+                    });
+                }
+            } catch (error) {
+                console.warn('Failed to load from localStorage:', error);
+                appState.transcriptions = [];
+            }
+        }
+
+        // ==================== RECORDING FUNCTIONS ====================
+        async function startRecording(isVoiceEdit = false, targetId = null) {
+            try {
+                clearError();
+
+                // Check if API key is configured
+                let apiKey = getApiKey();
+                if (!apiKey) {
+                    apiKey = promptForApiKey();
+                    if (!apiKey) {
+                        return; // User cancelled or invalid key
+                    }
+                }
+
+                const constraints = {
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                };
+
+                appState.stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                const mimeType = getSupportedMimeType();
+                appState.mediaRecorder = new MediaRecorder(appState.stream, {
+                    mimeType: mimeType,
+                    audioBitsPerSecond: 128000
+                });
+
+                appState.audioChunks = [];
+                appState.currentEditTarget = isVoiceEdit ? targetId : null;
+
+                appState.mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        appState.audioChunks.push(event.data);
+                    }
+                };
+
+                appState.mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(appState.audioChunks, {
+                        type: appState.mediaRecorder.mimeType
+                    });
+
+                    if (audioBlob.size === 0) {
+                        showError('No audio detected. Please try recording again.');
+                        cleanup();
+                        return;
+                    }
+
+                    if (audioBlob.size > 25 * 1024 * 1024) {
+                        showError('Recording too large (>25MB). Please record shorter segments.');
+                        cleanup();
+                        return;
+                    }
+
+                    if (isVoiceEdit && targetId) {
+                        await handleVoiceEdit(audioBlob, targetId);
+                    } else {
+                        await transcribeAudio(audioBlob);
+                    }
+                    cleanup();
+                };
+
+                appState.mediaRecorder.onerror = (event) => {
+                    showError('Recording error occurred. Please try again.');
+                    cleanup();
+                };
+
+                appState.mediaRecorder.start();
+                appState.isRecording = true;
+                appState.isPaused = false;
+
+                if (isVoiceEdit) {
+                    elements.recordingStatusText.textContent = 'Recording Edit Instructions';
+                } else {
+                    elements.recordingStatusText.textContent = 'Recording';
+                }
+
+                startTimer();
+                updateUIState();
+
+            } catch (error) {
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    showError('Microphone access denied. Please allow microphone access and try again.');
+                } else if (error.name === 'NotFoundError') {
+                    showError('No microphone found. Please connect a microphone and try again.');
+                } else {
+                    showError('Failed to start recording. Please try again.');
+                }
+                cleanup();
+            }
+        }
+
+        function pauseRecording() {
+            if (appState.mediaRecorder && appState.mediaRecorder.state === 'recording') {
+                appState.mediaRecorder.pause();
+                appState.isPaused = true;
+                pauseTimer();
+                updateUIState();
+            }
+        }
+
+        function resumeRecording() {
+            if (appState.mediaRecorder && appState.mediaRecorder.state === 'paused') {
+                appState.mediaRecorder.resume();
+                appState.isPaused = false;
+                resumeTimer();
+                updateUIState();
+            }
+        }
+
+        function stopRecording() {
+            if (appState.mediaRecorder) {
+                stopTimer();
+                appState.mediaRecorder.stop();
+                appState.isRecording = false;
+                appState.isPaused = false;
+                updateUIState();
+            }
+        }
+
+        function cancelRecording() {
+            if (appState.mediaRecorder) {
+                stopTimer();
+                // Stop the recorder without processing the audio
+                appState.mediaRecorder.ondataavailable = null;
+                appState.mediaRecorder.onstop = null;
+                appState.mediaRecorder.stop();
+                cleanup();
+                console.log('Recording cancelled');
+            }
+        }
+
+        // ==================== TIMER FUNCTIONS ====================
+        function startTimer() {
+            appState.startTime = Date.now() - appState.pausedTime;
+            appState.timerInterval = setInterval(updateTimer, 100);
+        }
+
+        function updateTimer() {
+            const elapsed = Date.now() - appState.startTime;
+            elements.timer.textContent = formatTime(elapsed);
+        }
+
+        function pauseTimer() {
+            clearInterval(appState.timerInterval);
+            appState.pausedTime = Date.now() - appState.startTime;
+        }
+
+        function resumeTimer() {
+            appState.startTime = Date.now() - appState.pausedTime;
+            appState.timerInterval = setInterval(updateTimer, 100);
+        }
+
+        function stopTimer() {
+            clearInterval(appState.timerInterval);
+            appState.timerInterval = null;
+        }
+
+        function resetTimer() {
+            elements.timer.textContent = '00:00';
+            appState.pausedTime = 0;
+        }
+
+        // ==================== API INTEGRATION ====================
+        async function transcribeAudio(audioBlob) {
+            try {
+                elements.loadingText.textContent = 'Transcribing audio...';
+                elements.loadingText.style.display = 'block';
+                clearError();
+
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'recording.webm');
+                formData.append('model', CONFIG.WHISPER_MODEL);
+                formData.append('response_format', 'json');
+
+                console.log('Sending transcription request:', {
+                    endpoint: CONFIG.WHISPER_API_ENDPOINT,
+                    blobSize: audioBlob.size,
+                    blobType: audioBlob.type,
+                    model: CONFIG.WHISPER_MODEL
+                });
+
+                const response = await fetch(CONFIG.WHISPER_API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getApiKey()}`
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+
+                    console.error('API Error:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        errorData: errorData
+                    });
+
+                    if (response.status === 401) {
+                        throw new Error('Invalid API key. Please check your configuration.');
+                    } else if (response.status === 413) {
+                        throw new Error('Recording too large. Please record shorter segments.');
+                    } else if (response.status === 429) {
+                        throw new Error(`Rate limit exceeded: ${errorData.error?.message || 'Please wait and try again.'}`);
+                    } else {
+                        throw new Error(`API Error (${response.status}): ${errorData.error?.message || response.statusText}`);
+                    }
+                }
+
+                const data = await response.json();
+                addTranscription(data.text);
+
+            } catch (error) {
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    showError('Network error. Please check your connection and try again.');
+                } else {
+                    showError(error.message);
+                }
+            } finally {
+                elements.loadingText.style.display = 'none';
+            }
+        }
+
+        async function handleVoiceEdit(audioBlob, targetId) {
+            try {
+                elements.loadingText.textContent = 'Transcribing edit instructions...';
+                elements.loadingText.style.display = 'block';
+                clearError();
+
+                // First, transcribe the voice edit instructions
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'recording.webm');
+                formData.append('model', CONFIG.WHISPER_MODEL);
+                formData.append('response_format', 'json');
+
+                const response = await fetch(CONFIG.WHISPER_API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getApiKey()}`
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(`Transcription failed: ${errorData.error?.message || response.statusText}`);
+                }
+
+                const data = await response.json();
+                const editInstructions = data.text;
+
+                console.log('Voice edit instructions:', editInstructions);
+
+                // Now apply the edits using Claude
+                await applyEditsWithClaude(targetId, editInstructions);
+
+            } catch (error) {
+                showError(error.message || 'Failed to process voice edit.');
+            } finally {
+                elements.loadingText.style.display = 'none';
+            }
+        }
+
+        async function applyEditsWithClaude(targetId, editInstructions) {
+            try {
+                elements.loadingText.textContent = 'Applying edits with GPT-4o...';
+                elements.loadingText.style.display = 'block';
+
+                const targetTranscription = appState.transcriptions.find(t => t.id === targetId);
+                if (!targetTranscription) {
+                    throw new Error('Target transcription not found.');
+                }
+
+                // Get the current text (might have been manually edited)
+                const textareaElement = document.getElementById(`text-${targetId}`);
+                const currentText = textareaElement ? textareaElement.value : targetTranscription.text;
+
+                const systemPrompt = `You are a helpful text editor. The user will provide a transcription and edit instructions. Apply the requested edits and return ONLY the edited transcription text. Do not include any explanations, notes, or markdown formatting - just return the edited text directly.`;
+
+                const userPrompt = `Current transcription:
+${currentText}
+
+Edit instructions (from voice):
+${editInstructions}`;
+
+                console.log('Sending to GPT-4o:', {
+                    model: CONFIG.GPT_MODEL,
+                    currentTextLength: currentText.length,
+                    instructionsLength: editInstructions.length
+                });
+
+                const response = await fetch(CONFIG.GPT_API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getApiKey()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: CONFIG.GPT_MODEL,
+                        messages: [
+                            {
+                                role: 'system',
+                                content: systemPrompt
+                            },
+                            {
+                                role: 'user',
+                                content: userPrompt
+                            }
+                        ],
+                        temperature: 0.3
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+
+                    console.error('GPT API Error:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        errorData: errorData
+                    });
+
+                    if (response.status === 401) {
+                        throw new Error('Invalid API key. Please check your configuration.');
+                    } else if (response.status === 429) {
+                        throw new Error(`Rate limit exceeded: ${errorData.error?.message || 'Please wait and try again.'}`);
+                    } else {
+                        throw new Error(`GPT API Error (${response.status}): ${errorData.error?.message || response.statusText}`);
+                    }
+                }
+
+                const result = await response.json();
+                const editedText = result.choices[0].message.content;
+
+                console.log('Edited text received, length:', editedText.length);
+
+                // Add the edited version as a new transcription
+                addTranscription(editedText, `Edited version (based on: "${editInstructions.substring(0, 50)}...")`);
+
+            } catch (error) {
+                showError(error.message || 'Failed to apply edits with GPT-4o.');
+            } finally {
+                elements.loadingText.style.display = 'none';
+            }
+        }
+
+        // ==================== TRANSCRIPTION MANAGEMENT ====================
+        function addTranscription(text, note = null) {
+            const transcription = {
+                id: generateId(),
+                text: text,
+                timestamp: new Date(),
+                note: note
+            };
+
+            appState.transcriptions.unshift(transcription); // Add to beginning (newest first)
+            saveToStorage();
+            renderTranscriptions();
+        }
+
+        function updateTranscriptionText(id, newText) {
+            const transcription = appState.transcriptions.find(t => t.id === id);
+            if (transcription) {
+                transcription.text = newText;
+                saveToStorage();
+            }
+        }
+
+        function deleteTranscription(id) {
+            appState.transcriptions = appState.transcriptions.filter(t => t.id !== id);
+            saveToStorage();
+            renderTranscriptions();
+        }
+
+        async function copyTranscription(id) {
+            const transcription = appState.transcriptions.find(t => t.id === id);
+            if (!transcription) return;
+
+            try {
+                await navigator.clipboard.writeText(transcription.text);
+                const btn = document.querySelector(`#copy-${id}`);
+                if (btn) {
+                    const originalText = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                    }, 2000);
+                }
+            } catch (error) {
+                showError('Failed to copy to clipboard.');
+            }
+        }
+
+        function renderTranscriptions() {
+            if (appState.transcriptions.length === 0) {
+                elements.transcriptionsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <p>No transcriptions yet. Click "Start Recording" to begin.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            elements.transcriptionsContainer.innerHTML = appState.transcriptions.map((t, index) => `
+                <div class="transcription-item ${index === 0 ? 'latest' : ''}">
+                    <div class="transcription-header">
+                        <div class="transcription-meta">
+                            <h3>${index === 0 ? 'Latest Transcription' : 'Transcription'}</h3>
+                            <div class="timestamp">${formatTimestamp(t.timestamp)}${t.note ? ` • ${t.note}` : ''}</div>
+                        </div>
+                        <div class="transcription-actions">
+                            <button class="btn-success btn-small" onclick="copyTranscription('${t.id}')" id="copy-${t.id}">Copy</button>
+                            <button class="btn-purple btn-small" onclick="startVoiceEdit('${t.id}')">Record Voice Edit</button>
+                            <button class="btn-danger btn-small" onclick="deleteTranscription('${t.id}')">Delete</button>
+                        </div>
+                    </div>
+                    <textarea
+                        class="transcription-text"
+                        id="text-${t.id}"
+                        onblur="updateTranscriptionText('${t.id}', this.value)"
+                    >${t.text}</textarea>
+                </div>
+            `).join('');
+        }
+
+        // Make functions globally accessible for onclick handlers
+        window.copyTranscription = copyTranscription;
+        window.deleteTranscription = deleteTranscription;
+        window.updateTranscriptionText = updateTranscriptionText;
+        window.startVoiceEdit = (id) => {
+            if (appState.isRecording) {
+                showError('Please stop the current recording first.');
+                return;
+            }
+            startRecording(true, id);
+        };
+
+        // ==================== UI MANAGEMENT ====================
+        function updateUIState() {
+            if (appState.isRecording && !appState.isPaused) {
+                elements.startBtn.disabled = true;
+                elements.pauseBtn.disabled = false;
+                elements.pauseBtn.textContent = 'Pause';
+                elements.stopBtn.disabled = false;
+                elements.cancelBtn.disabled = false;
+                elements.recordingIndicator.classList.add('active');
+            } else if (appState.isRecording && appState.isPaused) {
+                elements.startBtn.disabled = true;
+                elements.pauseBtn.disabled = false;
+                elements.pauseBtn.textContent = 'Resume';
+                elements.stopBtn.disabled = false;
+                elements.cancelBtn.disabled = false;
+                elements.recordingIndicator.classList.remove('active');
+            } else {
+                elements.startBtn.disabled = false;
+                elements.pauseBtn.disabled = true;
+                elements.pauseBtn.textContent = 'Pause';
+                elements.stopBtn.disabled = true;
+                elements.cancelBtn.disabled = true;
+                elements.recordingIndicator.classList.remove('active');
+            }
+        }
+
+        function showError(message) {
+            elements.errorContainer.textContent = message;
+            elements.errorContainer.classList.add('visible');
+            setTimeout(clearError, 10000);
+        }
+
+        function clearError() {
+            elements.errorContainer.classList.remove('visible');
+            elements.errorContainer.textContent = '';
+        }
+
+        // ==================== CLEANUP ====================
+        function cleanup() {
+            if (appState.stream) {
+                appState.stream.getTracks().forEach(track => track.stop());
+                appState.stream = null;
+            }
+
+            appState.mediaRecorder = null;
+            appState.audioChunks = [];
+            appState.isRecording = false;
+            appState.isPaused = false;
+            appState.currentEditTarget = null;
+
+            elements.recordingStatusText.textContent = 'Recording';
+            stopTimer();
+            resetTimer();
+            updateUIState();
+        }
+
+        // ==================== EVENT LISTENERS ====================
+        elements.startBtn.addEventListener('click', () => startRecording(false));
+
+        elements.pauseBtn.addEventListener('click', () => {
+            if (appState.isPaused) {
+                resumeRecording();
+            } else {
+                pauseRecording();
+            }
+        });
+
+        elements.stopBtn.addEventListener('click', stopRecording);
+        elements.cancelBtn.addEventListener('click', cancelRecording);
+
+        // ==================== INITIALIZATION ====================
+        function initializeApp() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showError('Your browser does not support audio recording. Please use Chrome, Firefox, Safari, or Edge.');
+                elements.startBtn.disabled = true;
+                return;
+            }
+
+            if (!window.MediaRecorder) {
+                showError('MediaRecorder is not supported in your browser. Please update your browser.');
+                elements.startBtn.disabled = true;
+                return;
+            }
+
+            loadFromStorage();
+            renderTranscriptions();
+            updateConfigNote(); // Check and update API key status
+
+            console.log('Audio Transcriber initialized successfully');
+            console.log('Supported MIME type:', getSupportedMimeType());
+            console.log('Loaded transcriptions:', appState.transcriptions.length);
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>
