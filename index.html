@@ -44,9 +44,54 @@
             border: 1px solid #ffc107;
             padding: 10px;
             border-radius: 4px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             font-size: 14px;
             color: #856404;
+        }
+
+        .shortcuts-help {
+            background-color: #e7f3ff;
+            border: 1px solid #2196f3;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 30px;
+            font-size: 13px;
+            color: #0d47a1;
+        }
+
+        .shortcuts-help h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .shortcuts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .shortcut-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .shortcut-key {
+            background-color: #fff;
+            border: 1px solid #90caf9;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 12px;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .shortcut-desc {
+            font-size: 12px;
         }
 
         .status-section {
@@ -194,6 +239,42 @@
             border-color: #4a90e2;
         }
 
+        .transcription-item.selected {
+            background-color: #e8f5e9;
+            border-color: #4caf50;
+            border-width: 2px;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+
+        .transcription-item.selected.latest {
+            background-color: #e1f5fe;
+            border-color: #2196f3;
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+        }
+
+        .transcription-item.pending-delete {
+            background-color: #ffebee;
+            border-color: #f44336;
+            border-width: 2px;
+            box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.2);
+            position: relative;
+        }
+
+        .delete-confirm-banner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: #f44336;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+            border-radius: 5px 5px 0 0;
+            z-index: 10;
+        }
+
         .transcription-header {
             display: flex;
             justify-content: space-between;
@@ -317,6 +398,48 @@
 
         <div class="config-note" id="configNote">
             <strong>Note:</strong> You'll be prompted to enter your OpenAI API key when you start recording. <button class="btn-small btn-primary" onclick="promptForApiKey()" style="margin-left: 10px;">Set API Key Now</button>
+        </div>
+
+        <div class="shortcuts-help">
+            <h4>⌨️ Keyboard Shortcuts</h4>
+            <div class="shortcuts-grid">
+                <div class="shortcut-item">
+                    <span class="shortcut-key">R</span>
+                    <span class="shortcut-desc">Start/Pause/Resume recording</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">S</span>
+                    <span class="shortcut-desc">Stop recording</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">Esc</span>
+                    <span class="shortcut-desc">Cancel recording</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">C</span>
+                    <span class="shortcut-desc">Copy selected</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">E</span>
+                    <span class="shortcut-desc">Voice edit selected</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">D D</span>
+                    <span class="shortcut-desc">Delete selected (press twice)</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">↑/↓</span>
+                    <span class="shortcut-desc">Navigate transcriptions</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">Enter</span>
+                    <span class="shortcut-desc">Edit selected text</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-key">Esc</span>
+                    <span class="shortcut-desc">Exit edit / Return to latest</span>
+                </div>
+            </div>
         </div>
 
         <div class="status-section">
@@ -446,7 +569,10 @@
             pausedTime: 0,
             timerInterval: null,
             transcriptions: [],
-            currentEditTarget: null // Stores which transcription is being edited via voice
+            currentEditTarget: null, // Stores which transcription is being edited via voice
+            selectedTranscriptionIndex: 0, // Index of currently selected transcription (0 = latest)
+            pendingDeleteId: null, // ID of transcription awaiting deletion confirmation
+            deleteConfirmTimeout: null // Timeout for delete confirmation
         };
 
         // ==================== DOM ELEMENTS ====================
@@ -882,6 +1008,7 @@ ${editInstructions}`;
             };
 
             appState.transcriptions.unshift(transcription); // Add to beginning (newest first)
+            appState.selectedTranscriptionIndex = 0; // Select the new (latest) transcription
             saveToStorage();
             renderTranscriptions();
         }
@@ -894,8 +1021,34 @@ ${editInstructions}`;
             }
         }
 
+        function clearDeleteConfirmation() {
+            if (appState.deleteConfirmTimeout) {
+                clearTimeout(appState.deleteConfirmTimeout);
+                appState.deleteConfirmTimeout = null;
+            }
+            appState.pendingDeleteId = null;
+        }
+
         function deleteTranscription(id) {
+            const deletedIndex = appState.transcriptions.findIndex(t => t.id === id);
+            if (deletedIndex === -1) return;
+
             appState.transcriptions = appState.transcriptions.filter(t => t.id !== id);
+
+            // Clear delete confirmation state
+            clearDeleteConfirmation();
+
+            // Adjust selected index if needed
+            if (deletedIndex < appState.selectedTranscriptionIndex) {
+                // Deleted item was before selected item, shift selection up
+                appState.selectedTranscriptionIndex--;
+            } else if (deletedIndex === appState.selectedTranscriptionIndex) {
+                // Deleted the selected item, keep same index (or adjust to last if needed)
+                if (appState.selectedTranscriptionIndex >= appState.transcriptions.length) {
+                    appState.selectedTranscriptionIndex = Math.max(0, appState.transcriptions.length - 1);
+                }
+            }
+
             saveToStorage();
             renderTranscriptions();
         }
@@ -926,11 +1079,28 @@ ${editInstructions}`;
                         <p>No transcriptions yet. Click "Start Recording" to begin.</p>
                     </div>
                 `;
+                appState.selectedTranscriptionIndex = 0;
                 return;
             }
 
-            elements.transcriptionsContainer.innerHTML = appState.transcriptions.map((t, index) => `
-                <div class="transcription-item ${index === 0 ? 'latest' : ''}">
+            // Ensure selected index is valid
+            if (appState.selectedTranscriptionIndex >= appState.transcriptions.length) {
+                appState.selectedTranscriptionIndex = 0;
+            }
+
+            elements.transcriptionsContainer.innerHTML = appState.transcriptions.map((t, index) => {
+                const classes = [];
+                if (index === 0) classes.push('latest');
+                if (index === appState.selectedTranscriptionIndex) classes.push('selected');
+                if (t.id === appState.pendingDeleteId) classes.push('pending-delete');
+
+                const deleteConfirmBanner = t.id === appState.pendingDeleteId
+                    ? '<div class="delete-confirm-banner">Press D again to confirm deletion</div>'
+                    : '';
+
+                return `
+                <div class="transcription-item ${classes.join(' ')}" data-index="${index}" data-id="${t.id}">
+                    ${deleteConfirmBanner}
                     <div class="transcription-header">
                         <div class="transcription-meta">
                             <h3>${index === 0 ? 'Latest Transcription' : 'Transcription'}</h3>
@@ -948,7 +1118,8 @@ ${editInstructions}`;
                         onblur="updateTranscriptionText('${t.id}', this.value)"
                     >${t.text}</textarea>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         // Make functions globally accessible for onclick handlers
@@ -1032,6 +1203,167 @@ ${editInstructions}`;
 
         elements.stopBtn.addEventListener('click', stopRecording);
         elements.cancelBtn.addEventListener('click', cancelRecording);
+
+        // ==================== KEYBOARD SHORTCUTS ====================
+        document.addEventListener('keydown', (event) => {
+            // Don't trigger shortcuts if user is typing in a textarea or input
+            const isTyping = event.target.tagName === 'TEXTAREA' ||
+                             event.target.tagName === 'INPUT' ||
+                             event.target.isContentEditable;
+
+            // Escape key handling (special case - works even when typing)
+            if (event.key === 'Escape') {
+                if (appState.isRecording) {
+                    // Priority: Cancel recording if one is in progress
+                    event.preventDefault();
+                    cancelRecording();
+                    return;
+                } else if (isTyping) {
+                    // Blur the textarea/input (stays on current transcription)
+                    event.target.blur();
+                    return;
+                } else if (appState.selectedTranscriptionIndex !== 0 && appState.transcriptions.length > 0) {
+                    // Return to latest transcription and scroll to top of page
+                    event.preventDefault();
+                    clearDeleteConfirmation();
+                    appState.selectedTranscriptionIndex = 0;
+                    renderTranscriptions();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    return;
+                }
+            }
+
+            // Enter/Return key to focus textarea for editing (when not already typing)
+            if ((event.key === 'Enter' || event.key === 'Return') && !isTyping) {
+                event.preventDefault();
+                clearDeleteConfirmation();
+                if (appState.transcriptions.length > 0) {
+                    const selectedId = appState.transcriptions[appState.selectedTranscriptionIndex]?.id;
+                    if (selectedId) {
+                        const textarea = document.getElementById(`text-${selectedId}`);
+                        if (textarea) {
+                            textarea.focus();
+                            // Move cursor to end of text
+                            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                        }
+                    }
+                }
+                return;
+            }
+
+            // Don't process other shortcuts if user is typing
+            if (isTyping) {
+                return;
+            }
+
+            const key = event.key.toLowerCase();
+
+            // Recording control shortcuts
+            if (key === 'r') {
+                event.preventDefault();
+                if (!appState.isRecording) {
+                    // Start recording
+                    startRecording(false);
+                } else if (appState.isPaused) {
+                    // Resume recording
+                    resumeRecording();
+                } else {
+                    // Pause recording
+                    pauseRecording();
+                }
+                return;
+            }
+
+            if (key === 's') {
+                event.preventDefault();
+                if (appState.isRecording) {
+                    stopRecording();
+                }
+                return;
+            }
+
+            // Transcription action shortcuts (only if transcriptions exist)
+            if (appState.transcriptions.length === 0) {
+                return;
+            }
+
+            const selectedId = appState.transcriptions[appState.selectedTranscriptionIndex]?.id;
+
+            if (key === 'c') {
+                event.preventDefault();
+                clearDeleteConfirmation();
+                if (selectedId) {
+                    copyTranscription(selectedId);
+                }
+                return;
+            }
+
+            if (key === 'e') {
+                event.preventDefault();
+                clearDeleteConfirmation();
+                if (selectedId && !appState.isRecording) {
+                    startRecording(true, selectedId);
+                } else if (appState.isRecording) {
+                    showError('Please stop the current recording first.');
+                }
+                return;
+            }
+
+            if (key === 'd') {
+                event.preventDefault();
+                if (selectedId) {
+                    if (appState.pendingDeleteId === selectedId) {
+                        // Second press - confirm deletion
+                        deleteTranscription(selectedId);
+                    } else {
+                        // First press - show confirmation prompt
+                        clearDeleteConfirmation();
+                        appState.pendingDeleteId = selectedId;
+                        renderTranscriptions();
+
+                        // Auto-cancel after 3 seconds
+                        appState.deleteConfirmTimeout = setTimeout(() => {
+                            clearDeleteConfirmation();
+                            renderTranscriptions();
+                        }, 3000);
+                    }
+                }
+                return;
+            }
+
+            // Navigation shortcuts (clear delete confirmation when navigating)
+            if (key === 'arrowdown') {
+                event.preventDefault();
+                clearDeleteConfirmation();
+                if (appState.selectedTranscriptionIndex < appState.transcriptions.length - 1) {
+                    appState.selectedTranscriptionIndex++;
+                    renderTranscriptions();
+                    scrollToSelectedTranscription();
+                }
+                return;
+            }
+
+            if (key === 'arrowup') {
+                event.preventDefault();
+                clearDeleteConfirmation();
+                if (appState.selectedTranscriptionIndex > 0) {
+                    appState.selectedTranscriptionIndex--;
+                    renderTranscriptions();
+                    scrollToSelectedTranscription();
+                }
+                return;
+            }
+        });
+
+        // Helper function to scroll selected transcription into view
+        function scrollToSelectedTranscription() {
+            if (appState.transcriptions.length === 0) return;
+
+            const selectedElement = document.querySelector('.transcription-item.selected');
+            if (selectedElement) {
+                selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
 
         // ==================== INITIALIZATION ====================
         function initializeApp() {
